@@ -229,8 +229,13 @@ kern_return_t unpack_bootstrap() {
     NSString *bootstrap_path = [execpath stringByAppendingPathComponent:@"bootstrap.tar"];
     NSString *cydia64_path = [execpath stringByAppendingPathComponent:@"cydia64.tar"];
     
+    #if DEBUG
+    int signature = -1;
+    #else
+    int signature = open("/.installed_topanga", O_RDONLY);
+    #endif
     
-    if(([[NSFileManager defaultManager] fileExistsAtPath:@"/Applications/Cydia.app"]) == NO) {
+    if (signature == -1) {
 
         chdir("/");
         FILE *bootstrap = fopen([bootstrap_path UTF8String], "r");
@@ -250,6 +255,9 @@ kern_return_t unpack_bootstrap() {
 
         // NO to Cydia stashing
         open("/.cydia_no_stash", O_RDWR | O_CREAT);
+        
+        // Add our signature
+        open("/.installed_topanga", O_RDWR | O_CREAT);
         
         chmod("/private", 0777);
         chmod("/private/var", 0777);
