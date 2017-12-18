@@ -361,22 +361,22 @@ kern_return_t unpack_bootstrap() {
 
     // we're just doing Cydia for now..
     ret = trust_path("/Applications/Cydia.app");
-    ret = trust_path("/bin");
-    ret = trust_path("/usr/bin");
-    ret = trust_path("/usr/libexec/cydia");
+//    ret = trust_path("/bin");
+//    ret = trust_path("/usr/bin");
+//    ret = trust_path("/usr/libexec/cydia");
     
 //    extern void start_jailbreakd(void);
 //    start_jailbreakd();
     
-    ret = run_path("/Applications/Cydia.app/uicache");
+//    ret = run_path("/Applications/Cydia.app/uicache");
 
     // we probably don't want to do this for now..
-//    if (containermanagerd_proc) {
-//        kwrite_uint64(containermanagerd_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, contaienrmanagerd_cred);
-//        printf("[INFO]: gave containermanager its original creds\n");
-//    }
+    if (containermanagerd_proc) {
+        kwrite_uint64(containermanagerd_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, contaienrmanagerd_cred);
+        printf("[INFO]: gave containermanager its original creds\n");
+    }
 
-
+    exit(0);
     // respring
 //    pid_t backboardd_pid = get_pid_for_name("backboardd");
 //    printf("[INFO]: killing backboardd\n");
@@ -465,8 +465,6 @@ kern_return_t run_path(const char *path) {
     csflags = (csflags | CS_PLATFORM_BINARY | CS_INSTALLER | CS_GET_TASK_ALLOW) & ~(CS_RESTRICT | CS_KILL | CS_HARD);
     kwrite_uint32(proc  + 0x2a8 /* csflags */, csflags);
     
-    uint64_t kern_ucred = kread_uint64(kernel_task + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */);
-    kwrite_uint64(proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, kern_ucred);
     printf("empower\n");
 
     
