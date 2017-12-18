@@ -12,6 +12,7 @@
 		30A93B681FE59BAB001AE23A /* cydia64.tar in Resources */ = {isa = PBXBuildFile; fileRef = 30A93B671FE59BAA001AE23A /* cydia64.tar */; };
 		30AD6C351FE6F70400A59CC3 /* amfi_codesign.m in Sources */ = {isa = PBXBuildFile; fileRef = 30AD6C341FE6F70400A59CC3 /* amfi_codesign.m */; };
 		30AD6C3A1FE70ED100A59CC3 /* libjb.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 30AD6C391FE70ED000A59CC3 /* libjb.a */; };
+		30AD6C3C1FE74C4800A59CC3 /* jailbreakd.m in Sources */ = {isa = PBXBuildFile; fileRef = 30AD6C3B1FE74C4800A59CC3 /* jailbreakd.m */; };
 		75300F271FE439E4008C375D /* reload in Resources */ = {isa = PBXBuildFile; fileRef = 75300F251FE439E3008C375D /* reload */; };
 		75300F281FE439E4008C375D /* launchctl in Resources */ = {isa = PBXBuildFile; fileRef = 75300F261FE439E3008C375D /* launchctl */; };
 		7543BE7A1FDF24F50006745F /* jailbreak.m in Sources */ = {isa = PBXBuildFile; fileRef = 7543BE741FDF24F50006745F /* jailbreak.m */; };
@@ -38,6 +39,8 @@
 		30AD6C341FE6F70400A59CC3 /* amfi_codesign.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = amfi_codesign.m; sourceTree = "<group>"; };
 		30AD6C361FE6F8A500A59CC3 /* amfi_codesign.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = amfi_codesign.h; sourceTree = "<group>"; };
 		30AD6C391FE70ED000A59CC3 /* libjb.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libjb.a; path = ../../../libjb.a; sourceTree = "<group>"; };
+		30AD6C3B1FE74C4800A59CC3 /* jailbreakd.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = jailbreakd.m; sourceTree = "<group>"; };
+		30AD6C3D1FE77AD900A59CC3 /* utilities.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = utilities.h; sourceTree = "<group>"; };
 		75300F251FE439E3008C375D /* reload */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = reload; sourceTree = "<group>"; };
 		75300F261FE439E3008C375D /* launchctl */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = launchctl; sourceTree = "<group>"; };
 		7543BE711FDF24F50006745F /* jailbreak.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = jailbreak.h; sourceTree = "<group>"; };
@@ -101,6 +104,8 @@
 				7543BE741FDF24F50006745F /* jailbreak.m */,
 				30AD6C361FE6F8A500A59CC3 /* amfi_codesign.h */,
 				30AD6C341FE6F70400A59CC3 /* amfi_codesign.m */,
+				30AD6C3B1FE74C4800A59CC3 /* jailbreakd.m */,
+				30AD6C3D1FE77AD900A59CC3 /* utilities.h */,
 				30A93B651FE59153001AE23A /* utilities.m */,
 				30AD6C391FE70ED000A59CC3 /* libjb.a */,
 				7543BE771FDF24F50006745F /* libjb.h */,
@@ -236,6 +241,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				30AD6C3C1FE74C4800A59CC3 /* jailbreakd.m in Sources */,
 				B003EB351FC583CB00C58441 /* kmem.c in Sources */,
 				B0EF11171FCC784B00C1D14E /* symbols.c in Sources */,
 				7543BE7B1FDF24F50006745F /* patchfinder64_11.m in Sources */,

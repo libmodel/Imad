@@ -87,20 +87,20 @@ kern_return_t ret = KERN_SUCCESS;
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
                     
                     unpack_bootstrap();
-                    
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        
-                        
-                        [self.respringButton setTitle:@"respringing.." forState:UIControlStateNormal];
-                        
-                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-
-                            printf("[INFO]: respringing..\n");
-                            pid_t springboard_pid = get_pid_for_name("SpringBoard");
-                            kill(springboard_pid, SIGKILL);
-                        });
-                    });
-                    
+//                    
+//                    dispatch_async(dispatch_get_main_queue(), ^{
+//                        
+//                        
+//                        [self.respringButton setTitle:@"respringing.." forState:UIControlStateNormal];
+//                        
+//                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+//
+//                            printf("[INFO]: respringing..\n");
+//                            pid_t springboard_pid = get_pid_for_name("SpringBoard");
+//                            kill(springboard_pid, SIGKILL);
+//                        });
+//                    });
+//                    
                 });
                 
             }

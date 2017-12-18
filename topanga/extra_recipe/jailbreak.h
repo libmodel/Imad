@@ -20,7 +20,6 @@
 #include <sys/mount.h>
 #include <sys/utsname.h>
 #include <Foundation/Foundation.h>
-
 #include <CommonCrypto/CommonDigest.h>
 
 // taken from xerub's
@@ -38,7 +37,7 @@ extern uint64_t kernel_base;
 extern uint64_t kernel_task;
 extern uint64_t kaslr_slide;
 
-uint64_t get_proc_for_pid(pid_t target_pid);
+uint64_t get_proc_for_pid(pid_t target_pid, int spawned);
 pid_t get_pid_for_name(char *proc_name);
 
 

