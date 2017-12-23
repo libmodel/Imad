@@ -13,8 +13,9 @@ There are two methods currently used to grab hashes for amfi. xerub's and anothe
 
 When opening Cydia, it'll take 2-3 seconds because it is waiting for `cydo` to be injected by `jailbreakd`. Sources _should_ show up but refreshing will end up with an `http signal 6 error`.. not sure what's killing it yet.
 
-I might just ditch Cydia because of the mess. Cydia is a great tool but it's just too big, complex, and old for what it does.
+Cydia is probably not going to work with to.panga due to the structure. If you are interested in using Cydia, please wait for a full jailbreak (probably @Morpheus______ should do the job).
 
+this tool is really meant for developers only.
 
 ---
 
