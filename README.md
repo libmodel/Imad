@@ -39,6 +39,7 @@ oh and please don't complain about the code or bootstrap. Any unnecessary files 
 
 by Abraham Masri @cheesecakeufo
 
+thanks to @coolstarorg and @Morpheus______ for the updated bootstrap binaries and libs.
 
 thanks to @xerub, @stek29 and @nullriver and _obviously_, @i4nbeer for the exploit <3
 
