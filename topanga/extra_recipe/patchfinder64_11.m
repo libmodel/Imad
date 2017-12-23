@@ -367,35 +367,6 @@ calc64(const uint8_t *buf, addr_t start, addr_t end, int which)
     return value[which];
 }
 
-static addr_t
-calc64mov(const uint8_t *buf, addr_t start, addr_t end, int which)
-{
-    addr_t i;
-    uint64_t value[32];
-
-    memset(value, 0, sizeof(value));
-
-    end &= ~3;
-    for (i = start & ~3; i < end; i += 4) {
-        uint32_t op = *(uint32_t *)(buf + i);
-        unsigned reg = op & 0x1F;
-        uint64_t newval;
-        int rv = DecodeMov(op, value[reg], 0, &newval);
-        if (rv == 0) {
-            if (((op >> 31) & 1) == 0) {
-                newval &= 0xFFFFFFFF;
-            }
-            value[reg] = newval;
-        }
-    }
-    return value[which];
-}
-
-static addr_t
-find_call64(const uint8_t *buf, addr_t start, size_t length)
-{
-    return step64(buf, start, length, 0x94000000, 0xFC000000);
-}
 
 static addr_t
 follow_call64(const uint8_t *buf, addr_t call)
@@ -440,7 +411,7 @@ static addr_t pstring_size = 0;
 static addr_t kerndumpbase = -1;
 static addr_t kernel_entry = 0;
 static void *kernel_mh = 0;
-static addr_t kernel_delta = 0;
+
 
 // todo remove me
 uint64_t get_dumpbase (void) {

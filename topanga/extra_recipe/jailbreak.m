@@ -24,8 +24,13 @@ uint64_t amficache = 0;
 
 uint64_t containermanagerd_proc = 0;
 uint64_t contaienrmanagerd_cred = 0;
+uint64_t kern_ucred = 0;
 uint64_t kernel_trust = 0;
 
+struct trust_mem mem;
+
+// thanks to unthredera1n
+const uint8_t sandbox_original[] = {0x78, 0x08, 0x14, 0x20, 0x04, 0x0f, 0x04, 0xd0};
 
 /*
  * Purpose: iterates over the procs and finds our proc
@@ -62,7 +67,7 @@ uint64_t get_proc_for_pid(pid_t target_pid, int spawned) {
 /*
  * Purpose: iterates over the procs and finds a pid with given name
  */
-pid_t get_pid_for_name(char *name) {
+pid_t get_pid_for_name(char *name, int spawned) {
     
     uint64_t task_self = task_self_addr();
     uint64_t struct_task = rk64(task_self + koffset(KSTRUCT_OFFSET_IPC_PORT_IP_KOBJECT));
@@ -71,17 +76,23 @@ pid_t get_pid_for_name(char *name) {
     while (struct_task != 0) {
         uint64_t bsd_info = rk64(struct_task + koffset(KSTRUCT_OFFSET_TASK_BSD_INFO));
         
-        char comm[MAXCOMLEN+1];
-        kread(bsd_info + 0x268 /* KSTRUCT_OFFSET_PROC_COMM (is this iPhone X offset??) */, comm, 17);
+        if (((bsd_info & 0xffffffffffffffff) != 0xffffffffffffffff)) {
 
-        if(strcmp(name, comm) == 0) {
+            char comm[MAXCOMLEN+1];
+            kread(bsd_info + 0x268 /* KSTRUCT_OFFSET_PROC_COMM (is this iPhone X offset??) */, comm, 17);
 
-            // get the process pid
-            uint32_t pid = rk32(bsd_info + koffset(KSTRUCT_OFFSET_PROC_PID));
-            return (pid_t)pid;
+            if(strcmp(name, comm) == 0) {
+
+                // get the process pid
+                uint32_t pid = rk32(bsd_info + koffset(KSTRUCT_OFFSET_PROC_PID));
+                return (pid_t)pid;
+            }
         }
         
-        struct_task = rk64(struct_task + koffset(KSTRUCT_OFFSET_TASK_PREV));
+        if(spawned) // spawned binaries will exist AFTER our task
+            struct_task = rk64(struct_task + koffset(KSTRUCT_OFFSET_TASK_NEXT));
+        else
+            struct_task = rk64(struct_task + koffset(KSTRUCT_OFFSET_TASK_PREV));
         
         if(struct_task == -1)
             return -1;
@@ -89,43 +100,48 @@ pid_t get_pid_for_name(char *name) {
     return -1; // we failed :/
 }
 
-/*
- * Purpose: iterates over the procs and finds a proc with given name
- */
-//NSMutableArray *processed_procs;
-//uint64_t get_proc_for_name(char *name) {
-//    
-//    if(processed_procs == nil)
-//        processed_procs = [[NSMutableArray alloc] init];
-//    
-//    uint64_t task_self = task_self_addr();
-//    uint64_t struct_task = rk64(task_self + koffset(KSTRUCT_OFFSET_IPC_PORT_IP_KOBJECT));
-//    
-//    
-//    while (struct_task != 0) {
-//        uint64_t bsd_info = rk64(struct_task + koffset(KSTRUCT_OFFSET_TASK_BSD_INFO));
-//        
-//        if([processed_procs containsObject:@(bsd_info)])
-//            continue;
-//
-//        
-//        char comm[MAXCOMLEN+1];
-//        kread(bsd_info + 0x268 /* KSTRUCT_OFFSET_PROC_COMM (is this iPhone X offset??) */, comm, 17);
-//        
-//        if(strcmp(name, comm) == 0) {
-//            
-//            return bsd_info;
-//        }
-//        
-//        struct_task = rk64(struct_task + koffset(KSTRUCT_OFFSET_TASK_PREV));
-//        
-//        [processed_procs addObject:@(bsd_info)];
-//        if(struct_task == -1)
-//            return -1;
-//    }
-//    return -1; // we failed :/
-//}
 
+/*
+ *  Purpose: scans a list of procs for a given name.
+ *  Since we might have multiple processes with the same name
+ */
+NSMutableArray *get_pids_list_for_name(char *name) {
+    
+    NSMutableArray *pids_list = [[NSMutableArray alloc] init];
+    
+    uint64_t task_self = task_self_addr();
+    
+    uint64_t struct_task = rk64(task_self + koffset(KSTRUCT_OFFSET_IPC_PORT_IP_KOBJECT));
+    
+    while (struct_task != 0) {
+        uint64_t bsd_info = rk64(struct_task + koffset(KSTRUCT_OFFSET_TASK_BSD_INFO));
+        
+        if (((bsd_info & 0xffffffffffffffff) != 0xffffffffffffffff)) {
+            
+            char comm[MAXCOMLEN+1];
+            kread(bsd_info + 0x268 /* KSTRUCT_OFFSET_PROC_COMM (is this iPhone X offset??) */, comm, 17);
+            
+            if(strcmp(name, comm) == 0) {
+                
+                // get the process pid
+                pid_t pid = rk32(bsd_info + koffset(KSTRUCT_OFFSET_PROC_PID));
+                printf("[INFO]: found pid for: %s (%d)\n", name, pid);
+                
+                if(![pids_list containsObject:@(pid)])
+                    [pids_list addObject:@(pid)];
+            }
+        } else
+            break;
+        
+        if((struct_task & 0xFFFFFFF000000000) == 0 || struct_task == -1) {
+            break;
+        }
+        
+        struct_task = rk64(struct_task + koffset(KSTRUCT_OFFSET_TASK_NEXT));
+    }
+    
+    return pids_list;
+}
 
 uint64_t our_proc = 0;
 uint64_t our_cred = 0;
@@ -145,7 +161,7 @@ void set_uid0 () {
     
     extern uint64_t kernel_task;
     
-    uint64_t kern_ucred = kread_uint64(kernel_task + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */);
+    kern_ucred = kread_uint64(kernel_task + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */);
     
     if(our_cred == 0)
         our_cred = kread_uint64(our_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */);
@@ -165,8 +181,9 @@ void set_cred_back () {
     kwrite_uint64(our_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, our_cred);
 }
 
-
-
+/*
+ *  Purpose: mounts rootFS as read/write
+ */
 kern_return_t mount_rootfs() {
     
     kern_return_t ret = KERN_SUCCESS;
@@ -194,11 +211,15 @@ kern_return_t mount_rootfs() {
     
     uint64_t rootfs_vnode = kread_uint64(rootvnode);
     NSLog(@"rootfs_vnode: %llx\n", rootfs_vnode);
+    
     uint64_t v_mount = kread_uint64(rootfs_vnode + 0xd8);
     NSLog(@"v_mount: %llx (%llx)\n", v_mount, v_mount - kaslr_slide);
+    
     uint32_t v_flag = kread_uint32(v_mount + 0x71);
     NSLog(@"v_flag: %x (%llx)\n", v_flag, v_flag - kaslr_slide);
+
     kwrite_uint32(v_mount + 0x71, v_flag & ~(1 << 6));
+    
 
     set_uid0();
     printf("our uid: %d\n", getuid());
@@ -211,10 +232,22 @@ kern_return_t mount_rootfs() {
         printf("[INFO]: successfully mounted '/'\n");
     }
     
+    // NOSUID
+    uint32_t mnt_flags = kread_uint32(v_mount + 0x70);
+    printf("[INFO]: mnt_flags: %x (%llx)\n", mnt_flags, mnt_flags - kaslr_slide);
+
+    kwrite_uint32(v_mount + 0x70, mnt_flags & ~(MNT_ROOTFS >> 6));
+
+    mnt_flags = kread_uint32(v_mount + 0x70);
+    printf("[INFO]: mnt_flags (after kwrite): %x (%llx)\n", mnt_flags, mnt_flags - kaslr_slide);
+
 
     return ret;
 }
 
+/*
+ *  Purpose: unpacks bootstrap (Cydia and binaries)
+ */
 kern_return_t unpack_bootstrap() {
     
     kern_return_t ret = KERN_SUCCESS;
@@ -227,10 +260,10 @@ kern_return_t unpack_bootstrap() {
     NSString *execpath = [[NSString stringWithUTF8String:pt] stringByDeletingLastPathComponent];
 
     NSString *bootstrap_path = [execpath stringByAppendingPathComponent:@"bootstrap.tar"];
-    NSString *cydia64_path = [execpath stringByAppendingPathComponent:@"cydia64.tar"];
+    NSString *bootstrap_2_path = [execpath stringByAppendingPathComponent:@"bootstrap_2.tar"];
     
-    
-    if(([[NSFileManager defaultManager] fileExistsAtPath:@"/Applications/Cydia.app"]) == NO) {
+    BOOL should_install_cydia = !([[NSFileManager defaultManager] fileExistsAtPath:@"/Applications/Cydia.app"]);
+    if(should_install_cydia != YES) {
 
         chdir("/");
         FILE *bootstrap = fopen([bootstrap_path UTF8String], "r");
@@ -239,10 +272,14 @@ kern_return_t unpack_bootstrap() {
 
         // temp (install latest Cydia)
         chdir("/");
-        FILE *cydia64 = fopen([cydia64_path UTF8String], "r");
-        untar(cydia64, "/");
-        fclose(cydia64);
+        FILE *bootstrap_2 = fopen([bootstrap_2_path UTF8String], "r");
+        untar(bootstrap_2, "/");
+        fclose(bootstrap_2);
 
+        
+        pid_t cfprefsd_pid = get_pid_for_name("cfprefsd", false);
+        kill(cfprefsd_pid, SIGSTOP);
+        
         // Show hidden apps
         NSMutableDictionary* md = [[NSMutableDictionary alloc] initWithContentsOfFile:@"/var/mobile/Library/Preferences/com.apple.springboard.plist"];
         [md setObject:[NSNumber numberWithBool:YES] forKey:@"SBShowNonDefaultSystemApps"];
@@ -250,7 +287,7 @@ kern_return_t unpack_bootstrap() {
 
         // NO to Cydia stashing
         open("/.cydia_no_stash", O_RDWR | O_CREAT);
-        
+
         chmod("/private", 0777);
         chmod("/private/var", 0777);
         chmod("/private/var/tmp", 0777);
@@ -259,83 +296,18 @@ kern_return_t unpack_bootstrap() {
         chmod("/private/var/mobile/Library/Caches/", 0777);
         chmod("/private/var/mobile/Library/Preferences", 0777);
         
-        set_cred_back();
-        extern void uicache(void);
-        uicache(); // used to show Cydia.app
-        set_uid0();
-        
-        char *path = "/var/mobile/Library/Caches";
-        
-        DIR *mydir;
-        struct dirent *myfile;
-        
-        int fd = open(path, O_RDONLY, 0);
-        
-        
-        mydir = fdopendir(fd);
-        while((myfile = readdir(mydir)) != NULL) {
-            
-            NSString *file_name = [NSString stringWithFormat:@"%s", strdup(myfile->d_name)];
-            if ([file_name containsString:@".csstore"]) {
-                
-                NSLog(@"[INFO]: deleting csstore: %@", file_name);
-                
-                NSString *full_path = [NSString stringWithFormat:@"%s/%@", path, file_name];
-                unlink(strdup([full_path UTF8String]));
-                
-            }
-            
-        }
-        
-        closedir(mydir);
-        close(fd);
-        
-        // kill lsd
-        pid_t lsd_pid = get_pid_for_name("lsd");
-        kill(lsd_pid, SIGKILL);
-        
-        pid_t lsdiconsservice_pid = get_pid_for_name("lsdiconservice");
-        kill(lsdiconsservice_pid, SIGKILL);
-        
-        // remove caches
-        unlink("/var/mobile/Library/Caches/com.apple.springboard-imagecache-icons");
-        unlink("/var/mobile/Library/Caches/com.apple.springboard-imagecache-icons.plist");
-        unlink("/var/mobile/Library/Caches/com.apple.springboard-imagecache-smallicons");
-        unlink("/var/mobile/Library/Caches/com.apple.springboard-imagecache-smallicons.plist");
-        
-        unlink("/var/mobile/Library/Caches/SpringBoardIconCache");
-        unlink("/var/mobile/Library/Caches/SpringBoardIconCache-small");
-        unlink("/var/mobile/Library/Caches/com.apple.IconsCache");
-        
-        
-        // kill installd
-        pid_t installd_pid = get_pid_for_name("installd");
-        kill(installd_pid, SIGKILL);
-        
-    }
 
-//    char * original_dir_path = "/Applications/Cydia.app";
-//
-//    DIR *mydir;
-//    struct dirent *myfile;
-//
-//    int fd = open(original_dir_path, O_RDONLY, 0);
-//
-//    mydir = fdopendir(fd);
-//    while((myfile = readdir(mydir)) != NULL) {
-//
-//        if(strcmp(myfile->d_name, ".") == 0 || strcmp(myfile->d_name, "..") == 0)
-//            continue;
-//
-//        printf("[FILE]: %s\n", myfile->d_name);
-//        chmod(strdup([[NSString stringWithFormat:@"/Applications/Cydia.app/%s", myfile->d_name] UTF8String]), 0777);
-//        chown(strdup([[NSString stringWithFormat:@"/Applications/Cydia.app/%s", myfile->d_name] UTF8String]), 0, 0);
-//    }
+        printf("[INFO]: killing backboardd\n");
+        kill(cfprefsd_pid, SIGKILL);
+        
+        unlink("/System/Library/LaunchDaemons/com.apple.mobile.softwareupdated.plist");
+    }
 
     printf("[INFO]: finished installing bootstrap and friends\n");
 
+    
     // "fix" containermanagerd
-    containermanagerd_proc = get_proc_for_pid(get_pid_for_name("containermanager"), false);
+    containermanagerd_proc = get_proc_for_pid(get_pid_for_name("containermanager", false), false);
     
     if(containermanagerd_proc == -1) {
         printf("[ERROR]: no containermanagerd. wut\n");
@@ -350,7 +322,7 @@ kern_return_t unpack_bootstrap() {
     printf("[INFO]: got containermanagerd's ucred: %llx\n", contaienrmanagerd_cred);
 
     extern uint64_t kernel_task;
-    uint64_t kern_ucred = kread_uint64(kernel_task + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */);
+    kern_ucred = kread_uint64(kernel_task + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */);
     kwrite_uint64(containermanagerd_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, kern_ucred);
     
     trust_cache = find_trustcache();
@@ -358,33 +330,94 @@ kern_return_t unpack_bootstrap() {
     
     printf("trust_cache = 0x%llx\n", trust_cache);
     printf("amficache = 0x%llx\n", amficache);
-
-    // we're just doing Cydia for now..
-    ret = trust_path("/Applications/Cydia.app");
-//    ret = trust_path("/bin");
-//    ret = trust_path("/usr/bin");
-//    ret = trust_path("/usr/libexec/cydia");
     
-//    extern void start_jailbreakd(void);
-//    start_jailbreakd();
+    extern mach_port_t tfp0;
+    mem.next = kread_uint64(trust_cache);
+    *(uint64_t *)&mem.uuid[0] = 0xabadbabeabadbabe;
+    *(uint64_t *)&mem.uuid[8] = 0xabadbabeabadbabe;
     
-//    ret = run_path("/Applications/Cydia.app/uicache");
 
+    printf("[INFO]: grabbing hashes..\n");
+    int rv = grab_hashes("/Applications/Cydia.app", kread, amficache, mem.next);
+    rv = grab_hashes("/Library", kread, amficache, mem.next);
+//    rv = grab_hashes("/System", kread, amficache, mem.next); // takes a while..
+    rv = grab_hashes("/bin", kread, amficache, mem.next);
+    rv = grab_hashes("/usr", kread, amficache, mem.next);
+    rv = grab_hashes("/usr/lib", kread, amficache, mem.next);
+    rv = grab_hashes("/usr/lib/apt", kread, amficache, mem.next);
+    rv = grab_hashes("/usr/lib/apt/methods", kread, amficache, mem.next);
+    rv = grab_hashes("/usr/libexec/cydia", kread, amficache, mem.next);
+    
+    printf("rv = %d, numhash = %d\n", rv, numhash);
+    
+    trust_path(NULL);
+    
+    if(should_install_cydia == YES) {
+        // run uicache
+        ret = run_path("/usr/bin/uicache", (char **)&(const char*[]){"/usr/bin/uicache", NULL}, true);
+    }
+
+//    ret = run_path("/usr/bin/cycript", (char **)&(const char*[]){"/usr/bin/cycript", "-p", [[NSString stringWithFormat:@"%d", get_pid_for_name("SpringBoard")] UTF8String], "/Library/test_inject_springboard.cy", NULL}, true);
+
+//    ret = run_path("/usr/lib/apt/methods/http", (char **)&(const char*[]){"/usr/lib/apt/methods/http", NULL}, true);exit(0);/Volumes/empty/FUCKING64/apt7-lib/apt_1/build/include
+    
+//    ret = run_path("/usr/bin/apt-get", (char **)&(const char*[]){"/usr/bin/apt-get", "update", NULL}, true);
+//    ret = run_path("/usr/lib/apt/methods/https", (char **)&(const char*[]){"/usr/lib/apt/methods/https", NULL}, true);exit(0);
+    
+    // TODO: move to a separate thread (or maybe jailbreakd)?
+    ret = run_path("/usr/local/bin/dropbear", (char **)&(const char*[]){
+        "/usr/local/bin/dropbear",
+        "-F", /* Don't fork into background */
+        "-E", /* Log to standard error rather than syslog */
+        "-m", /* No message of the day */
+        "-R", /* Create hostkeys as required */
+        "-p", /* Listen on specified address and TCP port */
+        "2222", /* Just like Yalu/Saïgon */
+        NULL}, false /* this is a daemon, we don't need to wait */);
+    
+    
+    // alternative to launchctl (thanks to @xerub)
+//    {
+//        for (NSString *dir_path in [[NSArray alloc] initWithObjects:@"/Library/LaunchDaemons",
+//                                                                    @"/System/Library/LaunchDaemons",
+//                                                                    @"/System/Library/NanoLaunchDaemons", nil]) {
+//            for (NSString *daemon in [[NSFileManager defaultManager] contentsOfDirectoryAtPath:dir_path error:nil]) {
+//
+//                NSString *full_path = [dir_path stringByAppendingPathComponent:daemon];
+//                printf("[INFO]: attempting to load: %s\n", [full_path UTF8String]);
+//
+//                ret = run_path(pt, (char **)&(const char*[]){pt, "launchctl", [full_path UTF8String], NULL}, true);
+//            }
+//        }
+//    }
+    
     // we probably don't want to do this for now..
     if (containermanagerd_proc) {
         kwrite_uint64(containermanagerd_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, contaienrmanagerd_cred);
         printf("[INFO]: gave containermanager its original creds\n");
     }
 
-    exit(0);
-    // respring
-//    pid_t backboardd_pid = get_pid_for_name("backboardd");
-//    printf("[INFO]: killing backboardd\n");
-//    kill(backboardd_pid, SIGKILL);
+    
+    // keep this if you want to close to.panga
+    set_cred_back();
     
     return ret;
 }
 
+/*
+ *  Purpose: injects csflags and kern creds
+ */
+kern_return_t empower_proc(uint64_t proc) {
+    
+    uint32_t csflags = kread_uint32(proc  + 0x2a8 /* csflags */);
+    csflags = (csflags | CS_PLATFORM_BINARY | CS_INSTALLER | CS_GET_TASK_ALLOW) & ~(CS_RESTRICT | CS_KILL | CS_HARD);
+    kwrite_uint32(proc  + 0x2a8 /* csflags */, csflags);
+    
+    // kernel creds too :)
+    kwrite_uint64(proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, kern_ucred);
+    
+    return KERN_SUCCESS;
+}
 
 kern_return_t trust_path(char const *path) {
     
@@ -394,14 +427,7 @@ kern_return_t trust_path(char const *path) {
 #define USE_LIBJB
 #ifdef USE_LIBJB
     
-    struct trust_mem mem;
-    mem.next = kread_uint64(trust_cache);
-    *(uint64_t *)&mem.uuid[0] = 0xabadbabeabadbabe;
-    *(uint64_t *)&mem.uuid[8] = 0xabadbabeabadbabe;
-    
-    int rv = grab_hashes(path, kread, amficache, mem.next);
-    printf("rv = %d, numhash = %d\n", rv, numhash);
-    
+
     size_t length = (sizeof(mem) + numhash * 20 + 0xFFFF) & ~0xFFFF;
     
     if(kernel_trust == 0) {
@@ -411,7 +437,7 @@ kern_return_t trust_path(char const *path) {
             exit(0);
         }
     }
-    printf("alloced: 0x%zx => 0x%llx\n", length, kernel_trust);
+    printf("[INFO]: alloced: 0x%zx => 0x%llx\n", length, kernel_trust);
     
     mem.count = numhash;
     kwrite(kernel_trust, &mem, sizeof(mem));
@@ -449,26 +475,104 @@ kern_return_t trust_path(char const *path) {
     return ret;
 }
 
-kern_return_t run_path(const char *path) {
+kern_return_t run_path(const char *path, char *const __argv[ __restrict], boolean_t wait_for_pid) {
     
     kern_return_t ret = KERN_SUCCESS;
+    extern mach_port_t tfp0;
+    
+    // mark as executable
+    chmod(path, 0755);
+    
+    printf("[INFO]: requested to spawn: %s\n", path);
+    sleep(1);
     
     pid_t pd;
-    posix_spawn(&pd, path, NULL, NULL, (char **)&(const char*[]){path, NULL }, NULL);
     
-    printf("uicache: %d\n", pd);
+    int err;
+    posix_spawn_file_actions_t child_fd_actions;
+    if ((err = posix_spawn_file_actions_init (&child_fd_actions)))
+        (void)(perror ("posix_spawn_file_actions_init")), exit(ret);
+    
+    printf("[INFO]: done: posix_spawn_file_actions_init\n");
+    if ((err = posix_spawn_file_actions_addopen (&child_fd_actions, 1, "/var/mobile/run_path_logs",
+                                                 O_WRONLY | O_CREAT | O_TRUNC, 0644)))
+        (void)(perror ("posix_spawn_file_actions_addopen")), exit(ret);
+    
+    printf("[INFO]: done: posix_spawn_file_actions_addopen\n");
+    if ((err = posix_spawn_file_actions_adddup2 (&child_fd_actions, 1, 2)))
+        (void)(perror ("posix_spawn_file_actions_adddup2")), exit(ret);
+    printf("[INFO]: done: posix_spawn_file_actions_adddup2\n");
+    
+    if((err = posix_spawn(&pd, path, &child_fd_actions, NULL, __argv, NULL))) {
+        printf("[ERROR]: posix spawn error: %d\n", err);
+    }
+    
+    printf("[INFO]: %s's pid: %d\n", path, pd);
     uint64_t proc = get_proc_for_pid(pd, true);
     
-    printf("proc: %llx\n", proc);
-
-    uint32_t csflags = kread_uint32(proc  + 0x2a8 /* csflags */);
-    csflags = (csflags | CS_PLATFORM_BINARY | CS_INSTALLER | CS_GET_TASK_ALLOW) & ~(CS_RESTRICT | CS_KILL | CS_HARD);
-    kwrite_uint32(proc  + 0x2a8 /* csflags */, csflags);
+    printf("[INFO]: proc: %llx\n", proc);
     
-    printf("empower\n");
-
+    if(proc == 0xffffffffffffffff) {
+        ret = KERN_FAILURE;
+        return ret;
+    }
+//
+//    uint32_t csflags = kread_uint32(proc  + 0x2a8 /* csflags */);
+//    csflags = (csflags | CS_PLATFORM_BINARY | CS_INSTALLER | CS_GET_TASK_ALLOW) & ~(CS_RESTRICT | CS_KILL | CS_HARD);
+//    kwrite_uint32(proc  + 0x2a8 /* csflags */, csflags);
+//
+//    printf("[INFO]: adding 'task_for_pid-allow' entitlement to: %s\n", path);
+//    entitle_proc(proc, TASK_FOR_PID_ENT);
+//
     
-    waitpid(pd, NULL, 0);
+    printf("[INFO]: empowered!\n");
+    
+    if(wait_for_pid)
+        waitpid(pd, NULL, 0);
+    
+    NSString *fileContents = [NSString stringWithContentsOfFile:@"/var/mobile/run_path_logs" encoding:NSUTF8StringEncoding error:nil];
+    printf("[INFO]: contents of file: %s\n", strdup([fileContents UTF8String]));
+    
+    return ret;
+}
+
+/*
+ *  Purpose: adds (for now, overwrites) a given entitlement to a process
+ *  TODO: imrpove this (boolean, lists, etc..)
+ */
+kern_return_t entitle_proc(uint64_t proc, char *entitlement) {
+    
+    kern_return_t ret = KERN_SUCCESS;
+ 
+    uint64_t proc_cred = kread_uint64(proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */);
+    
+    uint64_t proc_mac_policy_list = kread_uint64(kread_uint64(proc_cred + sandbox_original[0]) + sandbox_original[1]);
+    printf("[INFO]: proc's policy list: %016llx\n", proc_mac_policy_list);
+    
+    uint64_t proc_policy = kread_uint64(proc_mac_policy_list + sandbox_original[3]);
+    printf("[INFO]: item buffer: %016llx\n", proc_policy);
+    
+    int max = kread_uint32(proc_mac_policy_list + sandbox_original[2]);
+    printf("[INFO]: max: %u\n", max);
+    
+    char* policy_str = (char*) malloc(CHAR_MAX);
+    uint64_t policy_str_address = kread_uint64(kread_uint64(proc_policy) + 0x10);
+    kread(policy_str_address, policy_str, CHAR_MAX);
+    printf("[INFO] old entitlement(length: %lu): %s\n", strlen(policy_str), policy_str);
+    
+    
+    // TODO: DO SOMETHING BETTER THAN THIS
+    // we're overwriting existing ents atm.. BAD
+    uint64_t new_str = kalloc_uint64(strlen(entitlement));
+    kwrite(new_str, entitlement, strlen(entitlement));
+    
+    kwrite_uint64(kread_uint64(proc_policy) + 0x10, new_str);
+    
+    bzero(policy_str, CHAR_MAX);
+    kread(kread_uint64(kread_uint64(proc_policy) + 0x10), policy_str, CHAR_MAX);
+    printf("[INFO] new entitlement(length: %lu): %s\n", strlen(policy_str), policy_str);
+    
+    kwrite_uint64(kread_uint64(kern_ucred + 0x78) + 0x8, proc_mac_policy_list);
     
     return ret;
 }

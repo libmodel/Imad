@@ -2,6 +2,13 @@
 #define symbols_h
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <sys/sysctl.h>
+#include <sys/utsname.h>
+
+#include "symbols.h"
+#include "kmem.h"
+#include "kutils.h"
 
 enum kstruct_offset {
   /* struct task */
@@ -78,7 +85,7 @@ int koffset(enum kstruct_offset);
 
 uint64_t ksym(enum ksymbol);
 
-void offsets_init(void);
+kern_return_t offsets_init(void);
 void symbols_init(void);
 int probably_have_correct_symbols(void);
 

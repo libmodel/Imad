@@ -13,53 +13,6 @@
 #include <CommonCrypto/CommonCrypto.h>
 #include <CoreFoundation/CoreFoundation.h>
 
-
-static CFMutableDictionaryRef lc_code_sig(uint8_t *lc_code_signature, size_t lc_code_signature_len)
-{
-    CFMutableDictionaryRef code_signature =
-    CFDictionaryCreateMutable(kCFAllocatorDefault, 0,
-                              &kCFTypeDictionaryKeyCallBacks,
-                              &kCFTypeDictionaryValueCallBacks);
-//    require(code_signature, out);
-    
-    CS_SuperBlob *sb = (CS_SuperBlob*)lc_code_signature;
-//    require(ntohl(sb->magic) == CSMAGIC_EMBEDDED_SIGNATURE, out);
-    uint32_t count;
-    for (count = 0; count < ntohl(sb->count); count++) {
-        //uint32_t type = ntohl(sb->index[count].type);
-        uint32_t offset = ntohl(sb->index[count].offset);
-        uint8_t *bytes = lc_code_signature + offset;
-        //fprintf(stderr, "blob[%d]: (type: 0x%.08x, offset: %p)\n", count, type, (void*)offset);
-        uint32_t magic = ntohl(*(uint32_t*)bytes);
-        uint32_t length = ntohl(*(uint32_t*)(bytes+4));
-        //fprintf(stderr, "    magic: 0x%.08x length: %d\n", magic, length);
-        switch(magic) {
-            case 0xfade7171:
-            {
-                unsigned char digest[CC_SHA1_DIGEST_LENGTH];
-                //                CCDigest(kCCDigestSHA1, bytes, length, digest);
-                CC_SHA1(bytes + 8, length - 8, digest);
-                
-                CFDataRef message = CFDataCreate(kCFAllocatorDefault, digest, sizeof(digest));
-//                require(message, out);
-                CFDictionarySetValue(code_signature, CFSTR("EntitlementsHash"), message);
-                CFRelease(message);
-                message = CFDataCreate(kCFAllocatorDefault, bytes+8, length-8);
-//                require(message, out);
-                CFDictionarySetValue(code_signature, CFSTR("Entitlements"), message);
-                CFRelease(message);
-                break;
-                break;
-            }
-            default:
-                //                fprintf(stderr, "Skipping block with magic: 0x%x\n", magic);
-                break;
-        }
-    }
-    return code_signature;
-}
-
-
 uint8_t *load_code_signature(FILE *binary, size_t slice_offset)
 {
     bool signature_found = false;
@@ -81,6 +34,7 @@ uint8_t *load_code_signature(FILE *binary, size_t slice_offset)
             fseek(binary, off_cs, SEEK_SET);
             fread(cd, size_cs, 1, binary);
             result = cd;
+            
             break;
             
 //            struct { uint32_t offset; uint32_t size; } sig;
@@ -90,7 +44,6 @@ uint8_t *load_code_signature(FILE *binary, size_t slice_offset)
 //            uint8_t *data = malloc(length);
 //            if(!(length && data)) goto out;
 //            if(fread(data, length, 1, binary) != 1) goto out;
-
 
 //            result = lc_code_sig(data, length);
 //            free(data);

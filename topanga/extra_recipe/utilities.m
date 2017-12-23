@@ -4,6 +4,7 @@
 //
 //  Created by Abraham Masri on 12/16/17.
 //  Copyright © 2017 Abraham Masri. All rights reserved.
+//  Most functions here are by @xerub
 //
 
 #include <dirent.h>
@@ -68,7 +69,7 @@ kread(uint64_t where, void *p, size_t size)
         rv = mach_vm_read_overwrite(tfp0, where + offset, chunk, (mach_vm_address_t)p + offset, &sz);
         
         if (rv || sz == 0) {
-            printf("[ERROR]: error reading buffer at @%p\n", (void *)(offset + where));
+            printf("[ERROR]: error reading buffer at @%p (where: %llx)\n", (void *)(offset + where), where);
             break;
         }
         offset += sz;
@@ -127,5 +128,12 @@ size_t
 kwrite_uint32(uint64_t where, uint32_t value)
 {
     return kwrite(where, &value, sizeof(value));
+}
+
+uint64_t
+kalloc_uint64(vm_size_t size) {
+    mach_vm_address_t address = 0;
+    mach_vm_allocate(tfp0, (mach_vm_address_t *)&address, size, VM_FLAGS_ANYWHERE);
+    return address;
 }
 
