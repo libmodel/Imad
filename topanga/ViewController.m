@@ -9,13 +9,9 @@
 
 @interface ViewController ()
 @property (weak, nonatomic) IBOutlet UILabel *deviceModelLabel;
-@property (weak, nonatomic) IBOutlet UILabel *kernelbaseLabel;
-@property (weak, nonatomic) IBOutlet UILabel *kaslrLabel;
-@property (weak, nonatomic) IBOutlet UILabel *trustcacheLabel;
-@property (weak, nonatomic) IBOutlet UILabel *amficacheLabel;
-@property (weak, nonatomic) IBOutlet UILabel *rootvnode;
+@property (weak, nonatomic) IBOutlet UIImageView *jjjjImage;
+
 @property (weak, nonatomic) IBOutlet UIButton *jailbreakButton;
-@property (weak, nonatomic) IBOutlet UIProgressView *progressView;
 
 @end
 
@@ -50,9 +46,12 @@ kern_return_t ret = KERN_SUCCESS;
 
 - (void) show_post_jailbreak {
     
+    
+    [UIView animateWithDuration:0.3 animations:^() {
+        self.jjjjImage.alpha = 0;
+    }];
     [self.jailbreakButton setTitle:@"finished" forState:UIControlStateNormal];
-    [self.progressView setHidden:YES];
-
+    
     
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
         
@@ -70,7 +69,10 @@ kern_return_t ret = KERN_SUCCESS;
 
 - (void) show_unpack_bootstrap {
 
-    [self.jailbreakButton setTitle:@"installing Cydia.." forState:UIControlStateNormal];
+    [UIView animateWithDuration:0.3 animations:^() {
+        self.jjjjImage.alpha = 0.6;
+    }];
+    [self.jailbreakButton setTitle:@"installing jjjj.." forState:UIControlStateNormal];
     
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
         
@@ -90,10 +92,8 @@ kern_return_t ret = KERN_SUCCESS;
     [self.jailbreakButton setBackgroundColor:[UIColor clearColor]];
     [self.jailbreakButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
     [self.jailbreakButton setTitle:@"jailbreaking.." forState:UIControlStateNormal];
-    self.jailbreakButton.titleLabel.font = [UIFont systemFontOfSize:17];
+    self.jailbreakButton.titleLabel.font = [UIFont systemFontOfSize:20];
     [self.jailbreakButton setEnabled:NO];
-    [self.progressView setHidden:NO];
-    [self.progressView setProgress:0.3 animated:YES];
     
     
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^(void){
@@ -102,35 +102,14 @@ kern_return_t ret = KERN_SUCCESS;
         
         dispatch_async(dispatch_get_main_queue(), ^{
             
-            
-            extern uint64_t kernel_base;
-            extern uint64_t kaslr_slide;
-            
-            [self.kernelbaseLabel setText:[NSString stringWithFormat:@"%llx (%llx)", kernel_base, kernel_base - kaslr_slide]];
-            [self.kaslrLabel setText:[NSString stringWithFormat:@"slide: %llx", kaslr_slide]];
-            
-            int rv = init_kernel(kernel_base, NULL);
-            
-            if(rv == 0) {
+            if(ret != KERN_SUCCESS) {
+                [self.jailbreakButton setTitle:@"failed. reboot" forState:UIControlStateNormal];
+                return;
                 
-                uint64_t trustcache = find_trustcache();
-                uint64_t amficache = find_amficache();
-                uint64_t rootvnode = find_rootvnode();
-                
-                [self.trustcacheLabel setText: [[NSString stringWithFormat:@"0x%llx (0x%llx)", trustcache, (uint64_t)(trustcache - kaslr_slide)] uppercaseString]];
-                [self.amficacheLabel setText:[[NSString stringWithFormat:@"0x%llx (0x%llx)", amficache, (uint64_t)(amficache - kaslr_slide)] uppercaseString]];
-                
-                [self.rootvnode setText:[[NSString stringWithFormat:@"0x%llx (0x%llx)", rootvnode, (uint64_t)(rootvnode - kaslr_slide)] uppercaseString]];
-                
-                if(ret != KERN_SUCCESS) {
-                    [self.jailbreakButton setTitle:@"failed" forState:UIControlStateNormal];
-                    return;
-                    
-                }
-                
-                [self.progressView setProgress:0.5 animated:YES];
-                [self show_unpack_bootstrap];
             }
+            
+            [self show_unpack_bootstrap];
+            
             
         });
     });
@@ -141,6 +120,8 @@ kern_return_t ret = KERN_SUCCESS;
 - (void)viewDidLoad {
     [super viewDidLoad];
     [self addGradient];
+    
+    
     
 //    NSMutableArray *axx = [[NSMutableArray alloc] init];
 //    pid_t axx_pid = 572;

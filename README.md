@@ -1,15 +1,17 @@
 # to.panga for iOS 11 (up to 11.1.2) [a WIP project for devs only]
 
+_to.panga: where the mountain (kernel) meets the sea (user)_
+
 What it achieves so far:
 
 * tfp0 (thanks to @i4nbeer)
-* patched version of bootstrap + Cydia 64-bit
+* patched version of bootstrap
 * AMFI codesigning stuff (thanks to @xerub)
 * PoC `jailbreakd` daemon to inject a given set of processes
 
 ---
 ### notes:
-There are two methods currently used to grab hashes for amfi. xerub's and another method that supports FAT binaries (yes, Cydia is FAT).
+There are two methods currently used to grab hashes for amfi. xerub's and another method that supports FAT binaries.
 
 When opening Cydia, it'll take 2-3 seconds because it is waiting for `cydo` to be injected by `jailbreakd`. Sources _should_ show up but refreshing will end up with an `http signal 6 error`.. not sure what's killing it yet.
 
@@ -21,8 +23,9 @@ this tool is really meant for developers only.
 
 ### to-do:
 
-* fix whatever is killing/aborting `http` or even better, not use Cydia at all.
-* improve `jailbreakd`
+* fix dpkg's lzma support
+* fix dependencies issues with dpkg (currently uses --force-all)
+* improve `jailbreakd` to avoid panics
 
 ---
 
@@ -46,3 +49,4 @@ thanks to @xerub, @stek29 and @nullriver and _obviously_, @i4nbeer for the explo
 
 ---
 if you plan to use any of my code, please give credit. thx.
+

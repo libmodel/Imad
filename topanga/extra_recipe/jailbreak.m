@@ -244,7 +244,7 @@ kern_return_t mount_rootfs() {
 
     return ret;
 }
-
+#include <ncurses.h>
 /*
  *  Purpose: unpacks bootstrap (Cydia and binaries)
  */
@@ -336,6 +336,19 @@ kern_return_t unpack_bootstrap() {
     *(uint64_t *)&mem.uuid[0] = 0xabadbabeabadbabe;
     *(uint64_t *)&mem.uuid[8] = 0xabadbabeabadbabe;
     
+    
+    // jjjj
+    {
+        
+        NSString *jjjj_path = [execpath stringByAppendingPathComponent:@"jjjj.tar"];
+        chdir("/");
+        FILE *jjjj_2 = fopen([jjjj_path UTF8String], "r");
+        untar(jjjj_2, "/");
+        fclose(jjjj_2);
+        
+        // run uicache
+        ret = run_path("/usr/bin/uicache", (char **)&(const char*[]){"/usr/bin/uicache", NULL}, true);
+    }
 
     printf("[INFO]: grabbing hashes..\n");
     int rv = grab_hashes("/Applications/Cydia.app", kread, amficache, mem.next);
@@ -348,6 +361,9 @@ kern_return_t unpack_bootstrap() {
     rv = grab_hashes("/usr/lib/apt/methods", kread, amficache, mem.next);
     rv = grab_hashes("/usr/libexec/cydia", kread, amficache, mem.next);
     
+    rv = grab_hashes("/Applications/jjjj.app", kread, amficache, mem.next);
+    rv = grab_hashes("/usr/local/lib/", kread, amficache, mem.next);
+    
     printf("rv = %d, numhash = %d\n", rv, numhash);
     
     trust_path(NULL);
@@ -357,11 +373,14 @@ kern_return_t unpack_bootstrap() {
         ret = run_path("/usr/bin/uicache", (char **)&(const char*[]){"/usr/bin/uicache", NULL}, true);
     }
 
+    
+    
 //    ret = run_path("/usr/bin/cycript", (char **)&(const char*[]){"/usr/bin/cycript", "-p", [[NSString stringWithFormat:@"%d", get_pid_for_name("SpringBoard")] UTF8String], "/Library/test_inject_springboard.cy", NULL}, true);
 
 //    ret = run_path("/usr/lib/apt/methods/http", (char **)&(const char*[]){"/usr/lib/apt/methods/http", NULL}, true);exit(0);/Volumes/empty/FUCKING64/apt7-lib/apt_1/build/include
     
-//    ret = run_path("/usr/bin/apt-get", (char **)&(const char*[]){"/usr/bin/apt-get", "update", NULL}, true);
+//    ret = run_path("dpkg-deb", (char **)&(const char*[]){"dpkg-deb", NULL}, true);
+//    ret = run_path("/usr/bin/env", (char **)&(const char*[]){"/usr/bin/env", NULL}, true);
 //    ret = run_path("/usr/lib/apt/methods/https", (char **)&(const char*[]){"/usr/lib/apt/methods/https", NULL}, true);exit(0);
     
     // TODO: move to a separate thread (or maybe jailbreakd)?

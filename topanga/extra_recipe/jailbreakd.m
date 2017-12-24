@@ -79,12 +79,12 @@ void *start_scanning() {
                 printf("[INFO]: getting and setting %s's cflags..\n", binary_char_name);
                 if(empower_proc(binary_proc) == KERN_SUCCESS) {
                     printf("[INFO]: empowered %s!\n", binary_char_name);
-                 
-                    // wait till they're empowered then set the old creds back to avoid panics
-                    usleep(500000);
-                    kwrite_uint64(binary_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, binary_original_cred);
-                    
-                    printf("[INFO]: I've set %s's creds back to original\n", binary_char_name);
+//
+//                    // wait till they're empowered then set the old creds back to avoid panics
+//                    usleep(500000);
+//                    kwrite_uint64(binary_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, binary_original_cred);
+//
+//                    printf("[INFO]: I've set %s's creds back to original\n", binary_char_name);
                 }
             }
         }
@@ -101,7 +101,8 @@ void start_jailbreakd(void) {
     
     task_self = task_self_addr();
     processed_pids = [[NSMutableArray alloc] init];
-    allowed_binaries = [[NSMutableArray alloc] initWithObjects:@"cydo", @"http", @"https", @"apt", @"apt-get", @"dpkg", @"gpgv", @"mirror", nil];
+    allowed_binaries = [[NSMutableArray alloc] initWithObjects:@"jjjj.exe", @"setuid", @"dpkg", @"bzip2", @"cydo", nil];
+//    allowed_binaries = [[NSMutableArray alloc] initWithObjects:@"cydo", @"http", @"https", @"apt", @"apt-get", @"dpkg", @"gpgv", @"mirror", nil];
     
     
     printf("[*]: welcome to jailbreakd\n");

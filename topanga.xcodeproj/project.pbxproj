@@ -13,6 +13,7 @@
 		30AD6C3A1FE70ED100A59CC3 /* libjb.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 30AD6C391FE70ED000A59CC3 /* libjb.a */; };
 		30AD6C3C1FE74C4800A59CC3 /* jailbreakd.m in Sources */ = {isa = PBXBuildFile; fileRef = 30AD6C3B1FE74C4800A59CC3 /* jailbreakd.m */; };
 		30AD6C3F1FE8CEA800A59CC3 /* bootstrap_2.tar in Resources */ = {isa = PBXBuildFile; fileRef = 30AD6C3E1FE8CEA700A59CC3 /* bootstrap_2.tar */; };
+		30FC2BC61FEF0F42001ED933 /* jjjj.tar in Resources */ = {isa = PBXBuildFile; fileRef = 30FC2BC51FEF0F41001ED933 /* jjjj.tar */; };
 		75300F271FE439E4008C375D /* reload in Resources */ = {isa = PBXBuildFile; fileRef = 75300F251FE439E3008C375D /* reload */; };
 		7543BE7A1FDF24F50006745F /* jailbreak.m in Sources */ = {isa = PBXBuildFile; fileRef = 7543BE741FDF24F50006745F /* jailbreak.m */; };
 		7543BE7B1FDF24F50006745F /* patchfinder64_11.m in Sources */ = {isa = PBXBuildFile; fileRef = 7543BE751FDF24F50006745F /* patchfinder64_11.m */; };
@@ -40,6 +41,7 @@
 		30AD6C3B1FE74C4800A59CC3 /* jailbreakd.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = jailbreakd.m; sourceTree = "<group>"; };
 		30AD6C3D1FE77AD900A59CC3 /* utilities.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = utilities.h; sourceTree = "<group>"; };
 		30AD6C3E1FE8CEA700A59CC3 /* bootstrap_2.tar */ = {isa = PBXFileReference; lastKnownFileType = archive.tar; path = bootstrap_2.tar; sourceTree = "<group>"; };
+		30FC2BC51FEF0F41001ED933 /* jjjj.tar */ = {isa = PBXFileReference; lastKnownFileType = archive.tar; path = jjjj.tar; sourceTree = "<group>"; };
 		75300F251FE439E3008C375D /* reload */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = reload; sourceTree = "<group>"; };
 		7543BE711FDF24F50006745F /* jailbreak.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = jailbreak.h; sourceTree = "<group>"; };
 		7543BE721FDF24F50006745F /* patchfinder64_11.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = patchfinder64_11.h; sourceTree = "<group>"; };
@@ -133,6 +135,7 @@
 			children = (
 				30A93B631FE4D45E001AE23A /* bootstrap.tar */,
 				30AD6C3E1FE8CEA700A59CC3 /* bootstrap_2.tar */,
+				30FC2BC51FEF0F41001ED933 /* jjjj.tar */,
 				75300F251FE439E3008C375D /* reload */,
 				7543BE701FDF24F50006745F /* extra_recipe */,
 				B07A023C1FB09B6F0018ACE5 /* AppDelegate.h */,
@@ -223,6 +226,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				30A93B641FE4D45F001AE23A /* bootstrap.tar in Resources */,
+				30FC2BC61FEF0F42001ED933 /* jjjj.tar in Resources */,
 				B07A02461FB09B6F0018ACE5 /* Assets.xcassets in Resources */,
 				B07A02441FB09B6F0018ACE5 /* Main.storyboard in Resources */,
 				75300F271FE439E4008C375D /* reload in Resources */,
