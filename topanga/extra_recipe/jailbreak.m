@@ -119,7 +119,7 @@ NSMutableArray *get_pids_list_for_name(char *name) {
         if (((bsd_info & 0xffffffffffffffff) != 0xffffffffffffffff)) {
             
             char comm[MAXCOMLEN+1];
-            kread(bsd_info + 0x268 /* KSTRUCT_OFFSET_PROC_COMM (is this iPhone X offset??) */, comm, 17);
+            kread(bsd_info + 0x268 /* KSTRUCT_OFFSET_PROC_COMM */, comm, 17);
             
             if(strcmp(name, comm) == 0) {
                 
@@ -244,7 +244,7 @@ kern_return_t mount_rootfs() {
 
     return ret;
 }
-#include <ncurses.h>
+
 /*
  *  Purpose: unpacks bootstrap (Cydia and binaries)
  */
@@ -262,8 +262,8 @@ kern_return_t unpack_bootstrap() {
     NSString *bootstrap_path = [execpath stringByAppendingPathComponent:@"bootstrap.tar"];
     NSString *bootstrap_2_path = [execpath stringByAppendingPathComponent:@"bootstrap_2.tar"];
     
-    BOOL should_install_cydia = !([[NSFileManager defaultManager] fileExistsAtPath:@"/Applications/Cydia.app"]);
-    if(should_install_cydia != YES) {
+    BOOL should_install_jjjj = !([[NSFileManager defaultManager] fileExistsAtPath:@"/Applications/jjjj.app"]);
+    if(should_install_jjjj != YES) {
 
         chdir("/");
         FILE *bootstrap = fopen([bootstrap_path UTF8String], "r");
@@ -351,24 +351,22 @@ kern_return_t unpack_bootstrap() {
     }
 
     printf("[INFO]: grabbing hashes..\n");
-    int rv = grab_hashes("/Applications/Cydia.app", kread, amficache, mem.next);
+    int rv = grab_hashes("/Applications/jjjj.app", kread, amficache, mem.next);
     rv = grab_hashes("/Library", kread, amficache, mem.next);
-//    rv = grab_hashes("/System", kread, amficache, mem.next); // takes a while..
+    //rv = grab_hashes("/System", kread, amficache, mem.next); // takes a while..
     rv = grab_hashes("/bin", kread, amficache, mem.next);
     rv = grab_hashes("/usr", kread, amficache, mem.next);
     rv = grab_hashes("/usr/lib", kread, amficache, mem.next);
     rv = grab_hashes("/usr/lib/apt", kread, amficache, mem.next);
     rv = grab_hashes("/usr/lib/apt/methods", kread, amficache, mem.next);
     rv = grab_hashes("/usr/libexec/cydia", kread, amficache, mem.next);
-    
-    rv = grab_hashes("/Applications/jjjj.app", kread, amficache, mem.next);
     rv = grab_hashes("/usr/local/lib/", kread, amficache, mem.next);
     
     printf("rv = %d, numhash = %d\n", rv, numhash);
     
     trust_path(NULL);
     
-    if(should_install_cydia == YES) {
+    if(should_install_jjjj == YES) {
         // run uicache
         ret = run_path("/usr/bin/uicache", (char **)&(const char*[]){"/usr/bin/uicache", NULL}, true);
     }
@@ -424,13 +422,21 @@ kern_return_t unpack_bootstrap() {
 }
 
 /*
- *  Purpose: injects csflags and kern creds
+ *  Purpose: injects csflags
  */
 kern_return_t empower_proc(uint64_t proc) {
     
     uint32_t csflags = kread_uint32(proc  + 0x2a8 /* csflags */);
     csflags = (csflags | CS_PLATFORM_BINARY | CS_INSTALLER | CS_GET_TASK_ALLOW) & ~(CS_RESTRICT | CS_KILL | CS_HARD);
     kwrite_uint32(proc  + 0x2a8 /* csflags */, csflags);
+    
+    return KERN_SUCCESS;
+}
+
+/*
+ *  Purpose: write the ucreds
+ */
+kern_return_t set_creds(uint64_t proc) {
     
     // kernel creds too :)
     kwrite_uint64(proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, kern_ucred);
@@ -503,7 +509,6 @@ kern_return_t run_path(const char *path, char *const __argv[ __restrict], boolea
     chmod(path, 0755);
     
     printf("[INFO]: requested to spawn: %s\n", path);
-    sleep(1);
     
     pid_t pd;
     
@@ -535,7 +540,7 @@ kern_return_t run_path(const char *path, char *const __argv[ __restrict], boolea
         ret = KERN_FAILURE;
         return ret;
     }
-//
+
 //    uint32_t csflags = kread_uint32(proc  + 0x2a8 /* csflags */);
 //    csflags = (csflags | CS_PLATFORM_BINARY | CS_INSTALLER | CS_GET_TASK_ALLOW) & ~(CS_RESTRICT | CS_KILL | CS_HARD);
 //    kwrite_uint32(proc  + 0x2a8 /* csflags */, csflags);

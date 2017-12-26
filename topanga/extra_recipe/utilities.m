@@ -99,6 +99,7 @@ kwrite(uint64_t where, const void *p, size_t size)
     
     if(tfp0 == MACH_PORT_NULL) {
         printf("[ERROR]: tfp0's port is null!\n");
+        return -1; // we failed :/
     }
     
     int rv;

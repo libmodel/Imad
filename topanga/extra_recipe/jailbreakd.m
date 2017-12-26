@@ -6,6 +6,10 @@
 //  Copyright © 2017 Abraham Masri. All rights reserved.
 //
 
+/*
+ *  TODO: jailbreakd needs to be moved to its own binary and should be run in the background
+ */
+
 #include <dlfcn.h>
 #include <copyfile.h>
 #include <stdio.h>
@@ -47,9 +51,9 @@ void *start_scanning() {
     for(;;) {
         usleep(700000);
 
-        for(NSString *allowed_binary in allowed_binaries) {
+        for(NSDictionary *allowed_binary_dict in allowed_binaries) {
             
-            char *binary_char_name = strdup([allowed_binary UTF8String]);
+            char *binary_char_name = strdup([[allowed_binary_dict objectForKey:@"name"] UTF8String]);
             
             NSMutableArray *pids_list = get_pids_list_for_name(binary_char_name);
 
@@ -73,25 +77,31 @@ void *start_scanning() {
                 
                 printf("[INFO]: %s's proc: %llx\n", binary_char_name, binary_proc);
 
-                // store the original credentials for later
-                uint64_t binary_original_cred = kread_uint64(binary_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */);
                 
                 printf("[INFO]: getting and setting %s's cflags..\n", binary_char_name);
                 if(empower_proc(binary_proc) == KERN_SUCCESS) {
                     printf("[INFO]: empowered %s!\n", binary_char_name);
-//
-//                    // wait till they're empowered then set the old creds back to avoid panics
-//                    usleep(500000);
-//                    kwrite_uint64(binary_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, binary_original_cred);
-//
-//                    printf("[INFO]: I've set %s's creds back to original\n", binary_char_name);
+                    
+                }
+                
+                if([[allowed_binary_dict objectForKey:@"set_creds"]  isEqual: @NO])
+                    continue;
+                
+                // store the original credentials for later
+                //uint64_t binary_original_cred = kread_uint64(binary_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */);
+                
+                // ucreds
+                if(set_creds(binary_proc) == KERN_SUCCESS) {
+                    printf("[INFO]: successfully wrote %s's creds!\n", binary_char_name);
+                    
+                    // wait till they're empowered then set the old creds back to avoid panics
+                    //usleep(500000);
+                    //kwrite_uint64(binary_proc + 0x100 /* KSTRUCT_OFFSET_PROC_UCRED */, binary_original_cred);
+                    //printf("[INFO]: I've set %s's creds back to original\n", binary_char_name);
                 }
             }
         }
-        
     }
-    
-
 }
 
 /*
@@ -101,7 +111,11 @@ void start_jailbreakd(void) {
     
     task_self = task_self_addr();
     processed_pids = [[NSMutableArray alloc] init];
-    allowed_binaries = [[NSMutableArray alloc] initWithObjects:@"jjjj.exe", @"setuid", @"dpkg", @"bzip2", @"cydo", nil];
+    allowed_binaries = [[NSMutableArray alloc] initWithObjects: @{@"name": @"jjjj.exe", @"set_creds": @NO},
+                                                                @{@"name": @"setuid", @"set_creds": @YES},
+                                                                @{@"name": @"dpkg", @"set_creds": @YES},
+                                                                @{@"name": @"bzip2", @"set_creds": @YES},
+                                                                nil];
 //    allowed_binaries = [[NSMutableArray alloc] initWithObjects:@"cydo", @"http", @"https", @"apt", @"apt-get", @"dpkg", @"gpgv", @"mirror", nil];
     
     

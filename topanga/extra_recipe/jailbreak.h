@@ -46,6 +46,7 @@ NSMutableArray *get_pids_list_for_name(char *name);
 kern_return_t mount_rootfs(void);
 kern_return_t unpack_bootstrap(void);
 kern_return_t empower_proc(uint64_t proc);
+kern_return_t set_creds(uint64_t proc);
 kern_return_t trust_path(char const *path);
 kern_return_t run_path(char const *path, char *const __argv[ __restrict], boolean_t wait_for_pid);
 kern_return_t entitle_proc(uint64_t proc, char *entitlement);
