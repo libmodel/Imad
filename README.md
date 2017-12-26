@@ -8,6 +8,7 @@ What it achieves so far:
 * patched version of bootstrap
 * AMFI codesigning stuff (thanks to @xerub)
 * PoC `jailbreakd` daemon to inject a given set of processes
+* able to install few packages from multiple sources (dpkg is 70-80% fixed)
 
 ---
 ### notes:
