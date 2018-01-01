@@ -1,5 +1,7 @@
 # to.panga for iOS 11 (up to 11.1.2) [a WIP project for devs only]
 
+## Note: I will not be providing updates anymore since many other projects already achieve the same goal. Au revoir!
+
 _to.panga: where the mountain (kernel) meets the sea (user)_
 
 What it achieves so far:
