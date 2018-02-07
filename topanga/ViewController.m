@@ -12,6 +12,7 @@
 @property (weak, nonatomic) IBOutlet UIImageView *jjjjImage;
 
 @property (weak, nonatomic) IBOutlet UIButton *jailbreakButton;
+@property (weak, nonatomic) IBOutlet UIButton *removeButton;
 
 @end
 
@@ -85,6 +86,36 @@ kern_return_t ret = KERN_SUCCESS;
         
     });
     
+}
+- (IBAction)remove_topanga_tapped:(id)sender {
+    
+    [self.jailbreakButton setBackgroundColor:[UIColor clearColor]];
+    [self.jailbreakButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    [self.jailbreakButton setTitle:@"removing to.panga.." forState:UIControlStateNormal];
+    self.jailbreakButton.titleLabel.font = [UIFont systemFontOfSize:20];
+    [self.jailbreakButton setEnabled:NO];
+    [self.removeButton setHidden:YES];
+    
+    
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^(void){
+        
+        ret = go();
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            
+            if(ret != KERN_SUCCESS) {
+                [self.jailbreakButton setTitle:@"failed. reboot" forState:UIControlStateNormal];
+                return;
+                
+            }
+            
+            if(remove_topanga() == KERN_SUCCESS) {
+                [self.jailbreakButton setTitle:@"done. pls reboot." forState:UIControlStateNormal];
+            }
+            
+            
+        });
+    });
 }
 
 - (IBAction)jailbreak_tapped:(id)sender {

@@ -44,6 +44,7 @@ pid_t get_pid_for_name(char *proc_name, int spawned);
 NSMutableArray *get_pids_list_for_name(char *name);
 
 kern_return_t mount_rootfs(void);
+kern_return_t remove_topanga(void);
 kern_return_t unpack_bootstrap(void);
 kern_return_t empower_proc(uint64_t proc);
 kern_return_t set_creds(uint64_t proc);
